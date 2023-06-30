@@ -12,7 +12,7 @@
   limitations under the License.
  -->
 <resources>
-    <string name="app">ToyVPN</string>
+    <string name="app">ToyVPNJava</string>
     <string name="address">Server Address:</string>
     <string name="port">Server Port:</string>
     <string name="secret">Shared Secret:</string>
@@ -23,9 +23,9 @@
     <string name="packages">Packages (comma separated):</string>
     <string name="allowed">Allow</string>
     <string name="disallowed">Disallow</string>
-    <string name="connecting">ToyVPN is connecting...</string>
-    <string name="connected">ToyVPN is connected!</string>
-    <string name="disconnected">ToyVPN is disconnected!</string>
+    <string name="connecting">ToyVPNJava is connecting...</string>
+    <string name="connected">ToyVPNJava is connected!</string>
+    <string name="disconnected">ToyVPNJava is disconnected!</string>
     <string name="incomplete_proxy_settings">
         Incomplete proxy settings. For HTTP proxy we require both hostname and port settings.
     </string>

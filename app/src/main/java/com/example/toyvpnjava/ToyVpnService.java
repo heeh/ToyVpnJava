@@ -56,9 +56,21 @@ public class ToyVpnService extends VpnService implements Handler.Callback {
         if (mHandler == null) {
             mHandler = new Handler(this);
         }
-        // Create the intent to "configure" the connection (just start ToyVpnClient).
-        mConfigureIntent = PendingIntent.getActivity(this, 0, new Intent(this, ToyVpnClient.class),
-                PendingIntent.FLAG_UPDATE_CURRENT);
+
+
+        // PendingIntent patch: https://stackoverflow.com/questions/68473542/mediasessioncompattargeting-s-version-31-and-above-requires-that-one-of-flag
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            mConfigureIntent = PendingIntent.getActivity
+                    (this, 0, new Intent(this, ToyVpnClient.class), PendingIntent.FLAG_MUTABLE);
+        }
+        else
+        {
+            mConfigureIntent = PendingIntent.getActivity
+                    (this, 0, new Intent(this, ToyVpnClient.class), PendingIntent.FLAG_ONE_SHOT);
+        }
+//        // Create the intent to "configure" the connection (just start ToyVpnClient).
+//        mConfigureIntent = PendingIntent.getActivity(this, 0, new Intent(this, ToyVpnClient.class),
+//                PendingIntent.FLAG_UPDATE_CURRENT);
     }
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
