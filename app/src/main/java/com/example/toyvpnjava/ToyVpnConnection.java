@@ -178,7 +178,7 @@ public class ToyVpnConnection implements Runnable {
 //            // Create a local TUN interface using predetermined addresses. In your app,
 //            // you typically use values returned from the VPN gateway during handshaking.
             iface = builder
-                    .addAddress("10.120.0.1", 32)
+                    .addAddress("192.168.2.2", 24)
                     .addRoute("0.0.0.0", 0)
                     .establish();
 
