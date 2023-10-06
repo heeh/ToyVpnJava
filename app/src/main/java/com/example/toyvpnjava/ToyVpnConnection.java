@@ -41,6 +41,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ToyVpnConnection implements Runnable {
+    String TAG = "ToyVpnConnection";
     /**
      * Callback interface to let the {@link ToyVpnService} know about new connections
      * and update the foreground notification with connection status.
@@ -201,17 +202,38 @@ public class ToyVpnConnection implements Runnable {
             long lastSendTime = System.currentTimeMillis();
             long lastReceiveTime = System.currentTimeMillis();
             // We keep forwarding packets till something goes wrong.
+
+
             while (true) {
                 // Assume that we did not make any progress in this iteration.
                 boolean idle = true;
                 // Read the outgoing packet from the input stream.
                 int length = in.read(packet.array());
                 if (length > 0) {
-                    String pktStr = StandardCharsets.UTF_8.decode(packet).toString();
-                    Log.e(getTag(), "[Intercept]: " + pktStr);
+
+                    //String pktStr = StandardCharsets.UTF_8.decode(packet).toString();
+                    //Log.e(getTag(), "[Intercept]: " + pktStr);
 
                     // Write the outgoing packet to the tunnel.
                     packet.limit(length);
+
+
+//                    Log.d(TAG, "Total Length:" + tunnel.socket().getInetAddress());
+//                    tunnel.write(packet);
+//                    packet.flip();
+
+                    // Extract Destination IP
+                    TCP_IP TCP_debug = new TCP_IP(packet);
+                    TCP_debug.debug();
+                    String destIP = TCP_debug.getDestination();
+
+                    Log.d(TAG, "destIP: " + destIP);
+
+
+                    //////////////////////////////////
+
+
+
 
                     if (packet.get(0) != 0) {
                         // Write the incoming packet to the output stream.
