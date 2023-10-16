@@ -16,6 +16,7 @@
 package com.example.toyvpnjava;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import android.app.PendingIntent;
 import android.content.pm.PackageManager;
@@ -36,6 +37,7 @@ import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -176,14 +178,26 @@ public class ToyVpnConnection implements Runnable {
             // Configure a new interface from our VpnService instance. This must be done from inside a VpnService.
             VpnService.Builder builder = mService.new Builder();
 
+
+            String VPN_VIRTUAL_DNS_SERVER ="10.215.173.2";
+            String VPN_IP_ADDRESS = "10.215.173.1";
+
+
+
 //            // Create a local TUN interface using predetermined addresses. In your app,
 //            // you typically use values returned from the VPN gateway during handshaking.
+//            iface = builder
+//                    .addAddress("192.168.2.2", 24)
+//                    .addRoute("0.0.0.0", 0)
+//                    .establish();
+
+            // From PCAPDroid
             iface = builder
-                    .addAddress("192.168.2.2", 24)
-                    .addRoute("0.0.0.0", 0)
+                    .addAddress(VPN_IP_ADDRESS, 30)
+                    .addRoute("0.0.0.0", 1)
+                    .addRoute("128.0.0.0", 1)
+                    .addDnsServer(VPN_VIRTUAL_DNS_SERVER)
                     .establish();
-
-
 
 //            // Now we are connected. Set the flag.
             connected = true;
@@ -220,21 +234,30 @@ public class ToyVpnConnection implements Runnable {
 
 //                    Log.d(TAG, "Total Length:" + tunnel.socket().getInetAddress());
 //                    tunnel.write(packet);
-//                    packet.flip();
+
 
                     // Extract Destination IP
-                    TCP_IP TCP_debug = new TCP_IP(packet);
-                    TCP_debug.debug();
-                    String destIP = TCP_debug.getDestination();
+                    TransportPacket packetInfo = new TransportPacket(packet);
+                    packetInfo.debug();
+                    String sourceIP = packetInfo.getSourceIP();
+                    String destIP = packetInfo.getDestIP();
 
-                    Log.d(TAG, "destIP: " + destIP);
+                    if (packetInfo.getDestPort() == 53) {
+                        Log.e(TAG, "[" + packetInfo.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">");
+
+                        byte[] bytes = new byte[packet.remaining()];
+                        packet.get(bytes);
+                        String UDPData = new String(bytes, UTF_8);
+                        Log.e(TAG, "UDP_DATA: " + UDPData);
+                    }
+
 
 
                     //////////////////////////////////
 
 
 
-
+                    packet.flip();
                     if (packet.get(0) != 0) {
                         // Write the incoming packet to the output stream.
                         out.write(packet.array(), 0, length);
@@ -271,7 +294,7 @@ public class ToyVpnConnection implements Runnable {
                         packet.put((byte) 0).limit(1);
                         for (int i = 0; i < 3; ++i) {
                             packet.position(0);
-                            tunnel.write(packet);
+                            //tunnel.write(packet);
                         }
                         packet.clear();
                         lastSendTime = timeNow;

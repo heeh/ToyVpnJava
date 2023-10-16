@@ -2,18 +2,22 @@ package com.example.toyvpnjava;
 
 import java.nio.ByteBuffer;
 
-public class TCP_IP {
+public class TransportPacket {
 
     private ByteBuffer packet;
     private String hostname;
-    private String destIP;
     private String sourceIP;
+    private String destIP;
     private int version;
     private int protocol;
-    private int port;
+    //private int port;
+
+    private int srcPort;
+    private int destPort;
 
 
-    public TCP_IP(ByteBuffer pack) {
+
+    public TransportPacket(ByteBuffer pack) {
         this.packet = pack;
     }
 
@@ -27,15 +31,15 @@ public class TCP_IP {
         version = buffer >> 4;
         headerlength = buffer & 0x0F;
         headerlength *= 4;
-        System.out.println("IP Version:"+version);
-        System.out.println("Header Length:"+headerlength);
+//        System.out.println("IP Version:"+version);
+//        System.out.println("Header Length:"+headerlength);
         String status = "";
         status += "Header Length:"+headerlength;
 
         buffer = packet.get();      //DSCP + EN
         buffer = packet.getChar();  //Total Length
 
-        System.out.println( "Total Length:"+buffer);
+//        System.out.println( "Total Length:"+buffer);
 
         buffer = packet.getChar();  //Identification
         buffer = packet.getChar();  //Flags + Fragment Offset
@@ -43,7 +47,7 @@ public class TCP_IP {
         buffer = packet.get();      //Protocol
 
         protocol = buffer;
-        System.out.println( "Protocol:"+buffer);
+//        System.out.println( "Protocol:"+buffer);
 
         status += "  Protocol:"+buffer;
 
@@ -72,7 +76,7 @@ public class TCP_IP {
         temp = ((int) buff) & 0xFF;
         sourceIP += temp;
 
-        System.out.println( "Source IP:"+sourceIP);
+//        System.out.println( "Source IP:"+sourceIP);
 
         status += "   Source IP:"+sourceIP;
 
@@ -99,24 +103,55 @@ public class TCP_IP {
         temp = ((int) buff) & 0xFF;
         destIP += temp;
 
-        System.out.println( "Destination IP:" + destIP);
+//        System.out.println( "Destination IP:" + destIP);
         status += "   Destination IP:"+destIP;
 
+        buff = packet.get();
+        int first = ((int) buff) & 0xFF;
+        buff = packet.get();
+        int second = ((int) buff) & 0xFF;
+        srcPort = first * 256 + second;
+        sourceIP += ":";
+        sourceIP += srcPort;
 
+        buff = packet.get();
+        first = ((int) buff) & 0xFF;
+        buff = packet.get();
+        second = ((int) buff) & 0xFF;
+        destPort = first * 256 + second;
+        destIP += ":";
+        destIP += destPort;
 
+        // length for UDP
+        buff = packet.get();
+        buff = packet.get();
+
+        // checksum for UDP
+        buff = packet.get();
+        buff = packet.get();
 
     }
 
-    public String getDestination() {
+    public String getSourceIP() {
+        return sourceIP;
+    }
+    public String getDestIP() {
         return destIP;
     }
+
+    public int getSourcePort() {return srcPort;}
+    public int getDestPort() {return destPort;}
+
 
     public int getProtocol() {
         return protocol;
     }
 
-    public int getPort() {
-        return port;
+    // 6 for TCP, 17 for UDP
+    public String getProtocolStr() {
+        if (protocol == 6) return "TCP";
+        else if (protocol == 17) return "UDP";
+        else return String.valueOf(protocol);
     }
 
     public String getHostname() {
