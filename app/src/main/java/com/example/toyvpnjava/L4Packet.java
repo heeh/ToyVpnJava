@@ -20,7 +20,7 @@ public class L4Packet {
     private int srcPort;
     private int destPort;
 
-    public String data;
+    public byte[] data;
 
     public L4Packet(ByteBuffer pack) {
         this.packet = pack;
@@ -132,9 +132,8 @@ public class L4Packet {
         buff = packet.get();
 
 
-        byte[] bytes = new byte[packet.remaining()];
-        packet.get(bytes);
-        data = new String(bytes, UTF_8);
+        data = new byte[packet.remaining()];
+        packet.get(data);
     }
 
     public String getSourceIP() {
@@ -165,6 +164,10 @@ public class L4Packet {
         else return String.valueOf(protocol);
     }
 
+    public String getDataStr() {
+        return new String(data, UTF_8);
+    }
+
     public String getHostname() {
         return hostname;
     }
@@ -179,6 +182,6 @@ public class L4Packet {
         Log.e(TAG, "[Protocol]: " + getProtocolStr()
                 + "\t [srcIP]: <" + sourceIP + ">"
                 + "\t [destIP]: <" + destIP + ">"
-                + "\t [data]: " + data);
+                + "\t [data]: " + getDataStr());
     }
 }
