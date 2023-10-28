@@ -22,12 +22,10 @@ import android.app.PendingIntent;
 import android.content.pm.PackageManager;
 import android.net.ProxyInfo;
 import android.net.VpnService;
-import android.os.Build;
+import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 import android.util.Log;
-
-import androidx.annotation.RequiresApi;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -37,13 +35,12 @@ import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ToyVpnConnection implements Runnable {
-    String TAG = "ToyVpnConnection";
+    private String TAG = "ToyVpnConnection";
+
     /**
      * Callback interface to let the {@link ToyVpnService} know about new connections
      * and update the foreground notification with connection status.
@@ -129,7 +126,6 @@ public class ToyVpnConnection implements Runnable {
         mOnEstablishListener = listener;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.Q)
     @Override
     public void run() {
         try {
@@ -157,255 +153,139 @@ public class ToyVpnConnection implements Runnable {
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.Q)
     private boolean run(SocketAddress server)
             throws IOException, InterruptedException, IllegalArgumentException {
         ParcelFileDescriptor iface = null;
         boolean connected = false;
         // Create a DatagramChannel as the VPN tunnel.
-        try (DatagramChannel tunnel = DatagramChannel.open()) {
-            // Protect the tunnel before connecting to avoid loopback.
-            if (!mService.protect(tunnel.socket())) {
-                throw new IllegalStateException("Cannot protect the tunnel");
+
+        iface = configure();
+        // Now we are connected. Set the flag.
+        connected = true;
+        // Packets to be sent are queued in this input stream.
+        FileInputStream in = new FileInputStream(iface.getFileDescriptor());
+        // Packets received need to be written to this output stream.
+        FileOutputStream out = new FileOutputStream(iface.getFileDescriptor());
+        // Allocate the buffer for a single packet.
+        ByteBuffer packet = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        // Timeouts:
+        //   - when data has not been sent in a while, send empty keepalive messages.
+        //   - when data has not been received in a while, assume the connection is broken.
+        long lastSendTime = System.currentTimeMillis();
+        long lastReceiveTime = System.currentTimeMillis();
+        // We keep forwarding packets till something goes wrong.
+        while (true) {
+            // Assume that we did not make any progress in this iteration.
+            boolean idle = true;
+
+
+            // (1) Read the outgoing packet from the input stream.
+            int length = in.read(packet.array());
+
+
+
+            if (length > 0) {
+                packet.limit(length);
+
+                // (2) Packet Conversion (L3 -> L4)
+                extractURL(packet);
+                idle = false;
+                lastReceiveTime = System.currentTimeMillis();
+
+                // (3) L4 Packet Forwarding (Device <-> DNS Server)
+
+
+                // TODO:(4) Packet Conversion (L3 <- L4)
+
+                // TODO: (5) Write the L3 Buffer to output stream.
+//                out.write(packet.array(), 0, length);
+                packet.clear();
+                // There might be more incoming packets.
+                idle = false;
+                lastSendTime = System.currentTimeMillis();
             }
-//            // Connect to the server.
-//            tunnel.connect(server);
-//            // For simplicity, we use the same thread for both reading and
-//            // writing. Here we put the tunnel into non-blocking mode.
-//            tunnel.configureBlocking(false);
-//            // Authenticate and configure the virtual network interface.
-//            iface = handshake(tunnel);
-            // Configure a new interface from our VpnService instance. This must be done from inside a VpnService.
-            VpnService.Builder builder = mService.new Builder();
-
-
-            String VPN_VIRTUAL_DNS_SERVER ="10.215.173.2";
-            String VPN_IP_ADDRESS = "10.215.173.1";
-
-
-
-//            // Create a local TUN interface using predetermined addresses. In your app,
-//            // you typically use values returned from the VPN gateway during handshaking.
-//            iface = builder
-//                    .addAddress("192.168.2.2", 24)
-//                    .addRoute("0.0.0.0", 0)
-//                    .establish();
-
-            // From PCAPDroid
-            iface = builder
-                    .addAddress(VPN_IP_ADDRESS, 30)
-                    .addRoute("0.0.0.0", 1)
-                    .addRoute("128.0.0.0", 1)
-                    .addDnsServer(VPN_VIRTUAL_DNS_SERVER)
-                    .establish();
-
-//            // Now we are connected. Set the flag.
-            connected = true;
-
-
-
-            // Packets to be sent are queued in this input stream.
-            FileInputStream in = new FileInputStream(iface.getFileDescriptor());
-            // Packets received need to be written to this output stream.
-            FileOutputStream out = new FileOutputStream(iface.getFileDescriptor());
-            // Allocate the buffer for a single packet.
-            ByteBuffer packet = ByteBuffer.allocate(MAX_PACKET_SIZE);
-            // Timeouts:
-            //   - when data has not been sent in a while, send empty keepalive messages.
-            //   - when data has not been received in a while, assume the connection is broken.
-            long lastSendTime = System.currentTimeMillis();
-            long lastReceiveTime = System.currentTimeMillis();
-            // We keep forwarding packets till something goes wrong.
-
-
-            while (true) {
-                // Assume that we did not make any progress in this iteration.
-                boolean idle = true;
-                // Read the outgoing packet from the input stream.
-                int length = in.read(packet.array());
-                if (length > 0) {
-
-                    //String pktStr = StandardCharsets.UTF_8.decode(packet).toString();
-                    //Log.e(getTag(), "[Intercept]: " + pktStr);
-
-                    // Write the outgoing packet to the tunnel.
-                    packet.limit(length);
-
-
-//                    Log.d(TAG, "Total Length:" + tunnel.socket().getInetAddress());
-//                    tunnel.write(packet);
-
-
-                    // Extract Destination IP
-                    TransportPacket packetInfo = new TransportPacket(packet);
-                    packetInfo.debug();
-                    String sourceIP = packetInfo.getSourceIP();
-                    String destIP = packetInfo.getDestIP();
-
-                    if (packetInfo.getDestPort() == 53) {
-                        Log.e(TAG, "[" + packetInfo.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">");
-
-                        byte[] bytes = new byte[packet.remaining()];
-                        packet.get(bytes);
-                        String UDPData = new String(bytes, UTF_8);
-                        Log.e(TAG, "UDP_DATA: " + UDPData);
-                    }
-
-
-
-                    //////////////////////////////////
-
-
-
-                    packet.flip();
-                    if (packet.get(0) != 0) {
-                        // Write the incoming packet to the output stream.
+            // If we are idle or waiting for the network, sleep for a
+            // fraction of time to avoid busy looping.
+            if (idle) {
+                Thread.sleep(IDLE_INTERVAL_MS);
+                final long timeNow = System.currentTimeMillis();
+                if (lastSendTime + KEEPALIVE_INTERVAL_MS <= timeNow) {
+                    // We are receiving for a long time but not sending.
+                    // Send empty control messages.
+                    packet.put((byte) 0).limit(1);
+                    for (int i = 0; i < 3; ++i) {
+                        packet.position(0);
                         out.write(packet.array(), 0, length);
                     }
-
-                    //tunnel.write(packet);
                     packet.clear();
-                    // There might be more outgoing packets.
-                    idle = false;
-                    lastReceiveTime = System.currentTimeMillis();
-                }
-                // Read the incoming packet from the tunnel.
-                //length = tunnel.read(packet);
-//                if (length > 0) {
-//                    Log.e(getTag(), "[incoming packet]: " + packet.toString());
-//                    // Ignore control messages, which start with zero.
-//                    if (packet.get(0) != 0) {
-//                        // Write the incoming packet to the output stream.
-//                        out.write(packet.array(), 0, length);
-//                    }
-//                    packet.clear();
-//                    // There might be more incoming packets.
-//                    idle = false;
-//                    lastSendTime = System.currentTimeMillis();
-//                }
-                // If we are idle or waiting for the network, sleep for a
-                // fraction of time to avoid busy looping.
-                if (idle) {
-                    Thread.sleep(IDLE_INTERVAL_MS);
-                    final long timeNow = System.currentTimeMillis();
-                    if (lastSendTime + KEEPALIVE_INTERVAL_MS <= timeNow) {
-                        // We are receiving for a long time but not sending.
-                        // Send empty control messages.
-                        packet.put((byte) 0).limit(1);
-                        for (int i = 0; i < 3; ++i) {
-                            packet.position(0);
-                            //tunnel.write(packet);
-                        }
-                        packet.clear();
-                        lastSendTime = timeNow;
-                    } else if (lastReceiveTime + RECEIVE_TIMEOUT_MS <= timeNow) {
-                        // We are sending for a long time but not receiving.
-                        throw new IllegalStateException("Timed out");
-                    }
-                }
-            }
-        } catch (SocketException e) {
-            Log.e(getTag(), "Cannot use socket", e);
-        } finally {
-            if (iface != null) {
-                try {
-                    iface.close();
-                } catch (IOException e) {
-                    Log.e(getTag(), "Unable to close interface", e);
+                    lastSendTime = timeNow;
+                } else if (lastReceiveTime + RECEIVE_TIMEOUT_MS <= timeNow) {
+                    // We are sending for a long time but not receiving.
+                    throw new IllegalStateException("Timed out");
                 }
             }
         }
-        return connected;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.Q)
-    private ParcelFileDescriptor handshake(DatagramChannel tunnel)
-            throws IOException, InterruptedException {
-        // To build a secured tunnel, we should perform mutual authentication
-        // and exchange session keys for encryption. To keep things simple in
-        // this demo, we just send the shared secret in plaintext and wait
-        // for the server to send the parameters.
-        // Allocate the buffer for handshaking. We have a hardcoded maximum
-        // handshake size of 1024 bytes, which should be enough for demo
-        // purposes.
-        ByteBuffer packet = ByteBuffer.allocate(1024);
-        // Control messages always start with zero.
-        packet.put((byte) 0).put(mSharedSecret).flip();
-        // Send the secret several times in case of packet loss.
-        for (int i = 0; i < 3; ++i) {
-            packet.position(0);
-            tunnel.write(packet);
-        }
-        packet.clear();
-        // Wait for the parameters within a limited time.
-        for (int i = 0; i < MAX_HANDSHAKE_ATTEMPTS; ++i) {
-            Thread.sleep(IDLE_INTERVAL_MS);
-            // Normally we should not receive random packets. Check that the first
-            // byte is 0 as expected.
-            int length = tunnel.read(packet);
-            if (length > 0 && packet.get(0) == 0) {
-                return configure(new String(packet.array(), 1, length - 1, US_ASCII).trim());
-            }
-        }
-        throw new IOException("Timed out");
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.Q)
-    private ParcelFileDescriptor configure(String parameters) throws IllegalArgumentException {
+    private ParcelFileDescriptor configure() throws IllegalArgumentException {
         // Configure a builder while parsing the parameters.
         VpnService.Builder builder = mService.new Builder();
-        for (String parameter : parameters.split(" ")) {
-            String[] fields = parameter.split(",");
-            try {
-                switch (fields[0].charAt(0)) {
-                    case 'm':
-                        builder.setMtu(Short.parseShort(fields[1]));
-                        break;
-                    case 'a':
-                        builder.addAddress(fields[1], Integer.parseInt(fields[2]));
-                        break;
-                    case 'r':
-                        builder.addRoute(fields[1], Integer.parseInt(fields[2]));
-                        break;
-                    case 'd':
-                        builder.addDnsServer(fields[1]);
-                        break;
-                    case 's':
-                        builder.addSearchDomain(fields[1]);
-                        break;
-                }
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Bad parameter: " + parameter);
-            }
-        }
         // Create a new interface using the builder and save the parameters.
         final ParcelFileDescriptor vpnInterface;
-        for (String packageName : mPackages) {
-            try {
-                if (mAllow) {
-                    builder.addAllowedApplication(packageName);
-                } else {
-                    builder.addDisallowedApplication(packageName);
-                }
-            } catch (PackageManager.NameNotFoundException e) {
-                Log.w(getTag(), "Package not available: " + packageName, e);
-            }
-        }
-        builder.setSession(mServerName).setConfigureIntent(mConfigureIntent);
-        if (!TextUtils.isEmpty(mProxyHostName)) {
-            builder.setHttpProxy(ProxyInfo.buildDirectProxy(mProxyHostName, mProxyHostPort));
-        }
+//        for (String packageName : mPackages) {
+//            try {
+//                if (mAllow) {
+//                    builder.addAllowedApplication(packageName);
+//                } else {
+//                    builder.addDisallowedApplication(packageName);
+//                }
+//            } catch (PackageManager.NameNotFoundException e) {
+//                Log.w(getTag(), "Package not available: " + packageName, e);
+//            }
+//        }
+//        builder.setSession(mServerName).setConfigureIntent(mConfigureIntent);
+
         synchronized (mService) {
+
+            String VPN_IP_ADDRESS = "10.215.173.1";
+            String VPN_VIRTUAL_DNS_SERVER = "10.215.173.2";
+//            String VPN_VIRTUAL_DNS_SERVER = "8.8.8.8";
+
+            builder
+                    .addAddress(VPN_IP_ADDRESS, 30)
+//                    .addRoute("0.0.0.0", 1)
+//                    .addRoute("128.0.0.0", 1)
+                    .addRoute(VPN_VIRTUAL_DNS_SERVER, 32)
+                    .addDnsServer(VPN_VIRTUAL_DNS_SERVER);
+
             vpnInterface = builder.establish();
             if (mOnEstablishListener != null) {
                 mOnEstablishListener.onEstablish(vpnInterface);
             }
         }
-        Log.i(getTag(), "New interface: " + vpnInterface + " (" + parameters + ")");
+        Log.i(getTag(), "New interface: " + vpnInterface);
         return vpnInterface;
     }
 
     private final String getTag() {
         return ToyVpnConnection.class.getSimpleName() + "[" + mConnectionId + "]";
+    }
+
+    void extractURL(ByteBuffer packet) {
+        // Extract Destination IP
+        ByteBuffer temp = packet.asReadOnlyBuffer();
+        NetworkPacket networkPacket = new NetworkPacket(temp);
+        networkPacket.debug();
+        String sourceIP = networkPacket.getSourceIP();
+        String destIP = networkPacket.getDestIP();
+
+        //if (networkPacket.getDestPort() == 53) {
+
+        byte[] bytes = new byte[temp.remaining()];
+        temp.get(bytes);
+        String UDPData = new String(bytes, UTF_8);
+        Log.e(TAG, "[" + networkPacket.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + UDPData);
+//                Log.e(TAG, "UDP_DATA: " + UDPData);
+        //}
     }
 }
