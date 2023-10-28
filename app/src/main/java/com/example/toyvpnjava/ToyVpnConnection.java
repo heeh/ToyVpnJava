@@ -24,10 +24,7 @@ import android.util.Log;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.DatagramPacket;
 import java.nio.channels.DatagramChannel;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -37,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 public class ToyVpnConnection implements Runnable {
     private String TAG = "ToyVpnConnection";
     String L4_SOCKET_ADDR = "10.215.173.3";
+
+    String GOOGLE_DNS_SERVER = "8.8.8.8";
     /**
      * Callback interface to let the {@link ToyVpnService} know about new connections
      * and update the foreground notification with connection status.
@@ -184,18 +183,18 @@ public class ToyVpnConnection implements Runnable {
                 packet.limit(length);
 
                 // (2) Packet Conversion (L3 -> L4)
-                L4Packet l4Packet = getL4Packet(packet);
-                l4Packet.print();
+                L3Packet l3Packet = getL4Packet(packet);
+                l3Packet.print();
 
                 idle = false;
                 lastReceiveTime = System.currentTimeMillis();
 
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
-                if (l4Packet.protocol == 17 && l4Packet.destPort == 53) {
-                    String datagramPacketStr = forwardL4Packet(l4Packet);
+//                if (l4Packet.protocol == 17 && l4Packet.destPort == 53) {
+                    String datagramPacketStr = forwardL4Packet(l3Packet);
                     Log.e(TAG, datagramPacketStr);
 //                    forwardL4Packet(l4Packet);
-                }
+//                }
 
                 // TODO:(4) Packet Conversion (L3 <- L4)
 
@@ -255,7 +254,7 @@ public class ToyVpnConnection implements Runnable {
 
 
 
-//            String VPN_VIRTUAL_DNS_SERVER = "8.8.8.8";
+
 
             builder
                     .addAddress(VPN_IP_ADDRESS, 30)
@@ -278,22 +277,20 @@ public class ToyVpnConnection implements Runnable {
     }
 
 
-    L4Packet getL4Packet(ByteBuffer packet) {
+    L3Packet getL4Packet(ByteBuffer packet) {
         // Extract Destination IP
         ByteBuffer temp = packet.asReadOnlyBuffer();
-        return new L4Packet(temp);
+        return new L3Packet(temp);
     }
 
-    private String forwardL4Packet(L4Packet l4Packet) throws IOException {
+    private String forwardL4Packet(L3Packet l3Packet) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
         mService.protect(channel.socket());
-        channel.connect(new InetSocketAddress(l4Packet.destIP, l4Packet.destPort));
+        channel.connect(new InetSocketAddress(GOOGLE_DNS_SERVER, 53));
         channel.configureBlocking(false);
-        channel.write(ByteBuffer.wrap(l4Packet.data));
-
+        channel.write(ByteBuffer.wrap(l3Packet.data));
         ByteBuffer receiveBuffer = ByteBuffer.allocate(1024);
         int readBytes = channel.read(receiveBuffer);
-
         channel.close();
         return new String(receiveBuffer.array());
     }

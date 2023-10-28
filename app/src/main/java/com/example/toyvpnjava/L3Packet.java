@@ -6,7 +6,7 @@ import android.util.Log;
 
 import java.nio.ByteBuffer;
 
-public class L4Packet {
+public class L3Packet {
 
     public String TAG = "L3Packet";
     public ByteBuffer packet;
@@ -22,7 +22,7 @@ public class L4Packet {
 
     public byte[] data;
 
-    public L4Packet(ByteBuffer pack) {
+    public L3Packet(ByteBuffer pack) {
         this.packet = pack;
 
         int buffer = packet.get();
