@@ -281,10 +281,8 @@ public class ToyVpnConnection implements Runnable {
 
         //if (networkPacket.getDestPort() == 53) {
 
-        byte[] bytes = new byte[temp.remaining()];
-        temp.get(bytes);
-        String UDPData = new String(bytes, UTF_8);
-        Log.e(TAG, "[" + networkPacket.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + UDPData);
+
+        Log.e(TAG, "[" + networkPacket.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + networkPacket.data);
 //                Log.e(TAG, "UDP_DATA: " + UDPData);
         //}
     }

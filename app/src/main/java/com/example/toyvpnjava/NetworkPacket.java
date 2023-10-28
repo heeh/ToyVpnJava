@@ -1,5 +1,7 @@
 package com.example.toyvpnjava;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.nio.ByteBuffer;
 
 public class NetworkPacket {
@@ -15,7 +17,7 @@ public class NetworkPacket {
     private int srcPort;
     private int destPort;
 
-
+    public String data;
 
     public NetworkPacket(ByteBuffer pack) {
         this.packet = pack;
@@ -130,6 +132,10 @@ public class NetworkPacket {
         buff = packet.get();
         buff = packet.get();
 
+
+        byte[] bytes = new byte[packet.remaining()];
+        packet.get(bytes);
+        data  = new String(bytes, UTF_8);
     }
 
     public String getSourceIP() {
