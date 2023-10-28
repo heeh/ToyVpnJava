@@ -191,8 +191,11 @@ public class ToyVpnConnection implements Runnable {
                 lastReceiveTime = System.currentTimeMillis();
 
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
-                String datagramPacketStr = forwardL4Packet(l4Packet);
-                Log.e(TAG, datagramPacketStr);
+                if (l4Packet.protocol == 17 && l4Packet.destPort == 53) {
+                    String datagramPacketStr = forwardL4Packet(l4Packet);
+                    Log.e(TAG, datagramPacketStr);
+//                    forwardL4Packet(l4Packet);
+                }
 
                 // TODO:(4) Packet Conversion (L3 <- L4)
 
@@ -283,24 +286,16 @@ public class ToyVpnConnection implements Runnable {
 
     private String forwardL4Packet(L4Packet l4Packet) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
-        channel.configureBlocking(false);
         mService.protect(channel.socket());
-        channel.socket().bind(new InetSocketAddress(InetAddress.getByName(L4_SOCKET_ADDR), 7777));
+        channel.connect(new InetSocketAddress(l4Packet.destIP, l4Packet.destPort));
+        channel.configureBlocking(false);
+        channel.write(ByteBuffer.wrap(l4Packet.data));
 
-        // Send
-        InetSocketAddress destAddress = new InetSocketAddress(l4Packet.destIP, l4Packet.destPort);
-        channel.send(ByteBuffer.wrap(l4Packet.data), destAddress);
+        ByteBuffer receiveBuffer = ByteBuffer.allocate(1024);
+        int readBytes = channel.read(receiveBuffer);
 
-        // Receive
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        channel.receive(buffer);
-
-        // ByteBuffer -> String
-        buffer.flip();
-        byte[] bytes = new byte[buffer.remaining()];
-        buffer.get(bytes);
-        String msg = new String(bytes);
-        return msg;
+        channel.close();
+        return new String(receiveBuffer.array());
     }
 
 }
