@@ -24,6 +24,10 @@ import android.util.Log;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.DatagramPacket;
+import java.nio.channels.DatagramChannel;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -32,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 
 public class ToyVpnConnection implements Runnable {
     private String TAG = "ToyVpnConnection";
-
+    String L4_SOCKET_ADDR = "10.215.173.3";
     /**
      * Callback interface to let the {@link ToyVpnService} know about new connections
      * and update the foreground notification with connection status.
@@ -181,14 +185,14 @@ public class ToyVpnConnection implements Runnable {
 
                 // (2) Packet Conversion (L3 -> L4)
                 L4Packet l4Packet = getL4Packet(packet);
-
                 l4Packet.print();
-                //Log.e(TAG, "[" + l3Packet.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + l3Packet.data);
+
                 idle = false;
                 lastReceiveTime = System.currentTimeMillis();
 
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
-
+                String datagramPacketStr = forwardL4Packet(l4Packet);
+                Log.e(TAG, datagramPacketStr);
 
                 // TODO:(4) Packet Conversion (L3 <- L4)
 
@@ -244,6 +248,10 @@ public class ToyVpnConnection implements Runnable {
 
             String VPN_IP_ADDRESS = "10.215.173.1";
             String VPN_VIRTUAL_DNS_SERVER = "10.215.173.2";
+
+
+
+
 //            String VPN_VIRTUAL_DNS_SERVER = "8.8.8.8";
 
             builder
@@ -272,4 +280,27 @@ public class ToyVpnConnection implements Runnable {
         ByteBuffer temp = packet.asReadOnlyBuffer();
         return new L4Packet(temp);
     }
+
+    private String forwardL4Packet(L4Packet l4Packet) throws IOException {
+        DatagramChannel channel = DatagramChannel.open();
+        channel.configureBlocking(false);
+        mService.protect(channel.socket());
+        channel.socket().bind(new InetSocketAddress(InetAddress.getByName(L4_SOCKET_ADDR), 7777));
+
+        // Send
+        InetSocketAddress destAddress = new InetSocketAddress(l4Packet.destIP, l4Packet.destPort);
+        channel.send(ByteBuffer.wrap(l4Packet.data), destAddress);
+
+        // Receive
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        channel.receive(buffer);
+
+        // ByteBuffer -> String
+        buffer.flip();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        String msg = new String(bytes);
+        return msg;
+    }
+
 }

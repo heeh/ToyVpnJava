@@ -9,16 +9,16 @@ import java.nio.ByteBuffer;
 public class L4Packet {
 
     public String TAG = "L3Packet";
-    private ByteBuffer packet;
-    private String hostname;
-    private String sourceIP;
-    private String destIP;
-    private int version;
-    private int protocol;
-    //private int port;
+    public ByteBuffer packet;
+    public String hostname;
+    public String srcIP;
+    public String destIP;
+    public int version;
+    public int protocol;
+    //public int port;
 
-    private int srcPort;
-    private int destPort;
+    public int srcPort;
+    public int destPort;
 
     public byte[] data;
 
@@ -57,29 +57,29 @@ public class L4Packet {
 
         byte buff = (byte) buffer;
 
-        sourceIP = "";
+        srcIP = "";
         buff = packet.get();  //Source IP 1st Octet
         temp = ((int) buff) & 0xFF;
-        sourceIP += temp;
-        sourceIP += ".";
+        srcIP += temp;
+        srcIP += ".";
 
         buff = packet.get();  //Source IP 2nd Octet
         temp = ((int) buff) & 0xFF;
-        sourceIP += temp;
-        sourceIP += ".";
+        srcIP += temp;
+        srcIP += ".";
 
         buff = packet.get();  //Source IP 3rd Octet
         temp = ((int) buff) & 0xFF;
-        sourceIP += temp;
-        sourceIP += ".";
+        srcIP += temp;
+        srcIP += ".";
 
         buff = packet.get();  //Source IP 4th Octet
         temp = ((int) buff) & 0xFF;
-        sourceIP += temp;
+        srcIP += temp;
 
 //        System.out.println( "Source IP:"+sourceIP);
 
-        status += "   Source IP:" + sourceIP;
+        status += "   Source IP:" + srcIP;
 
 
         destIP = "";
@@ -112,16 +112,13 @@ public class L4Packet {
         buff = packet.get();
         int second = ((int) buff) & 0xFF;
         srcPort = first * 256 + second;
-        sourceIP += ":";
-        sourceIP += srcPort;
+
 
         buff = packet.get();
         first = ((int) buff) & 0xFF;
         buff = packet.get();
         second = ((int) buff) & 0xFF;
         destPort = first * 256 + second;
-        destIP += ":";
-        destIP += destPort;
 
         // length for UDP
         buff = packet.get();
@@ -136,27 +133,6 @@ public class L4Packet {
         packet.get(data);
     }
 
-    public String getSourceIP() {
-        return sourceIP;
-    }
-
-    public String getDestIP() {
-        return destIP;
-    }
-
-    public int getSourcePort() {
-        return srcPort;
-    }
-
-    public int getDestPort() {
-        return destPort;
-    }
-
-
-    public int getProtocol() {
-        return protocol;
-    }
-
     // 6 for TCP, 17 for UDP
     public String getProtocolStr() {
         if (protocol == 6) return "TCP";
@@ -168,20 +144,13 @@ public class L4Packet {
         return new String(data, UTF_8);
     }
 
-    public String getHostname() {
-        return hostname;
-    }
-
-    public int getIPversion() {
-        return version;
-    }
 
 
     public void print() {
         //if (networkPacket.getDestPort() == 53) {
         Log.e(TAG, "[Protocol]: " + getProtocolStr()
-                + "\t [srcIP]: <" + sourceIP + ">"
-                + "\t [destIP]: <" + destIP + ">"
+                + "\t [srcIP]: <" + srcIP + ":" + srcPort + ">"
+                + "\t [destIP]: <" + destIP + ":" + destPort + ">"
                 + "\t [data]: " + getDataStr());
     }
 }
