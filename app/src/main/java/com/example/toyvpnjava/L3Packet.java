@@ -4,7 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.nio.ByteBuffer;
 
-public class NetworkPacket {
+public class L3Packet {
 
     private ByteBuffer packet;
     private String hostname;
@@ -19,7 +19,7 @@ public class NetworkPacket {
 
     public String data;
 
-    public NetworkPacket(ByteBuffer pack) {
+    public L3Packet(ByteBuffer pack) {
         this.packet = pack;
     }
 

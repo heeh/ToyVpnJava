@@ -15,14 +15,8 @@
  */
 package com.example.toyvpnjava;
 
-import static java.nio.charset.StandardCharsets.US_ASCII;
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import android.app.PendingIntent;
-import android.content.pm.PackageManager;
-import android.net.ProxyInfo;
 import android.net.VpnService;
-import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 import android.util.Log;
@@ -32,9 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -274,15 +266,15 @@ public class ToyVpnConnection implements Runnable {
     void extractURL(ByteBuffer packet) {
         // Extract Destination IP
         ByteBuffer temp = packet.asReadOnlyBuffer();
-        NetworkPacket networkPacket = new NetworkPacket(temp);
-        networkPacket.debug();
-        String sourceIP = networkPacket.getSourceIP();
-        String destIP = networkPacket.getDestIP();
+        L3Packet l3Packet = new L3Packet(temp);
+        l3Packet.debug();
+        String sourceIP = l3Packet.getSourceIP();
+        String destIP = l3Packet.getDestIP();
 
         //if (networkPacket.getDestPort() == 53) {
 
 
-        Log.e(TAG, "[" + networkPacket.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + networkPacket.data);
+        Log.e(TAG, "[" + l3Packet.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + l3Packet.data);
 //                Log.e(TAG, "UDP_DATA: " + UDPData);
         //}
     }
