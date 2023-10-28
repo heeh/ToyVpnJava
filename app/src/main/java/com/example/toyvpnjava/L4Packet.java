@@ -2,10 +2,13 @@ package com.example.toyvpnjava;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import android.util.Log;
+
 import java.nio.ByteBuffer;
 
-public class L3Packet {
+public class L4Packet {
 
+    public String TAG = "L3Packet";
     private ByteBuffer packet;
     private String hostname;
     private String sourceIP;
@@ -19,12 +22,8 @@ public class L3Packet {
 
     public String data;
 
-    public L3Packet(ByteBuffer pack) {
+    public L4Packet(ByteBuffer pack) {
         this.packet = pack;
-    }
-
-    public void debug() {
-
 
         int buffer = packet.get();
         int headerlength;
@@ -36,7 +35,7 @@ public class L3Packet {
 //        System.out.println("IP Version:"+version);
 //        System.out.println("Header Length:"+headerlength);
         String status = "";
-        status += "Header Length:"+headerlength;
+        status += "Header Length:" + headerlength;
 
         buffer = packet.get();      //DSCP + EN
         buffer = packet.getChar();  //Total Length
@@ -51,14 +50,14 @@ public class L3Packet {
         protocol = buffer;
 //        System.out.println( "Protocol:"+buffer);
 
-        status += "  Protocol:"+buffer;
+        status += "  Protocol:" + buffer;
 
         buffer = packet.getChar();  //Header checksum
 
 
-        byte buff = (byte)buffer;
+        byte buff = (byte) buffer;
 
-        sourceIP  = "";
+        sourceIP = "";
         buff = packet.get();  //Source IP 1st Octet
         temp = ((int) buff) & 0xFF;
         sourceIP += temp;
@@ -80,10 +79,10 @@ public class L3Packet {
 
 //        System.out.println( "Source IP:"+sourceIP);
 
-        status += "   Source IP:"+sourceIP;
+        status += "   Source IP:" + sourceIP;
 
 
-        destIP  = "";
+        destIP = "";
 
 
         buff = packet.get();  //Destination IP 1st Octet
@@ -106,7 +105,7 @@ public class L3Packet {
         destIP += temp;
 
 //        System.out.println( "Destination IP:" + destIP);
-        status += "   Destination IP:"+destIP;
+        status += "   Destination IP:" + destIP;
 
         buff = packet.get();
         int first = ((int) buff) & 0xFF;
@@ -135,18 +134,24 @@ public class L3Packet {
 
         byte[] bytes = new byte[packet.remaining()];
         packet.get(bytes);
-        data  = new String(bytes, UTF_8);
+        data = new String(bytes, UTF_8);
     }
 
     public String getSourceIP() {
         return sourceIP;
     }
+
     public String getDestIP() {
         return destIP;
     }
 
-    public int getSourcePort() {return srcPort;}
-    public int getDestPort() {return destPort;}
+    public int getSourcePort() {
+        return srcPort;
+    }
+
+    public int getDestPort() {
+        return destPort;
+    }
 
 
     public int getProtocol() {
@@ -164,6 +169,16 @@ public class L3Packet {
         return hostname;
     }
 
-    public int getIPversion() { return version; }
+    public int getIPversion() {
+        return version;
+    }
 
+
+    public void print() {
+        //if (networkPacket.getDestPort() == 53) {
+        Log.e(TAG, "[Protocol]: " + getProtocolStr()
+                + "\t [srcIP]: <" + sourceIP + ">"
+                + "\t [destIP]: <" + destIP + ">"
+                + "\t [data]: " + data);
+    }
 }

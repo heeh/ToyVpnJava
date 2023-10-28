@@ -180,7 +180,10 @@ public class ToyVpnConnection implements Runnable {
                 packet.limit(length);
 
                 // (2) Packet Conversion (L3 -> L4)
-                extractURL(packet);
+                L4Packet l4Packet = getL4Packet(packet);
+
+                l4Packet.print();
+                //Log.e(TAG, "[" + l3Packet.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + l3Packet.data);
                 idle = false;
                 lastReceiveTime = System.currentTimeMillis();
 
@@ -263,19 +266,10 @@ public class ToyVpnConnection implements Runnable {
         return ToyVpnConnection.class.getSimpleName() + "[" + mConnectionId + "]";
     }
 
-    void extractURL(ByteBuffer packet) {
+
+    L4Packet getL4Packet(ByteBuffer packet) {
         // Extract Destination IP
         ByteBuffer temp = packet.asReadOnlyBuffer();
-        L3Packet l3Packet = new L3Packet(temp);
-        l3Packet.debug();
-        String sourceIP = l3Packet.getSourceIP();
-        String destIP = l3Packet.getDestIP();
-
-        //if (networkPacket.getDestPort() == 53) {
-
-
-        Log.e(TAG, "[" + l3Packet.getProtocolStr() + "] + srcIP: <" + sourceIP + "> -> destIP: <" + destIP + ">" + "DATA: " + l3Packet.data);
-//                Log.e(TAG, "UDP_DATA: " + UDPData);
-        //}
+        return new L4Packet(temp);
     }
 }
