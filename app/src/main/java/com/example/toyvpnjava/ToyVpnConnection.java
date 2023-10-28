@@ -40,6 +40,7 @@ public class ToyVpnConnection implements Runnable {
     String L4_SOCKET_ADDR = "10.215.173.3";
 
     String GOOGLE_DNS_SERVER = "8.8.8.8";
+
     /**
      * Callback interface to let the {@link ToyVpnService} know about new connections
      * and update the foreground notification with connection status.
@@ -182,30 +183,30 @@ public class ToyVpnConnection implements Runnable {
             int length = in.read(packet.array());
 
 
-
             if (length > 0) {
                 packet.limit(length);
 
                 // (2) Packet Conversion (L3 -> L4)
                 L3Packet l3Packet = getL4Packet(packet);
-                l3Packet.print();
+
 
                 idle = false;
                 lastReceiveTime = System.currentTimeMillis();
 
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
-//                if (l4Packet.protocol == 17 && l4Packet.destPort == 53) {
-                DatagramPacket l4Response = forwardL4Packet(l3Packet);
-                Log.e(TAG, "============================================================L4 RESPONSE============================================================"
-                        + "\n[address]: " + l4Response.getAddress()
-                        + "\n[port]: " + l4Response.getPort()
-                        + "\n[socket addr]: " + l4Response.getSocketAddress()
-                        + "\n[length]: "+ l4Response.getLength()
-                        + "\n[offset]: " + l4Response.getOffset()
-                        + "\n[L4 data]: " + new String(l4Response.getData(), UTF_8).substring(0, l4Response.getLength()));
+                if (l3Packet.protocol == 17 && l3Packet.destPort == 53) {
+                    l3Packet.print();
+                    DatagramPacket l4Response = forwardL4Packet(l3Packet);
+                    Log.e(TAG, "============================================================L4 RESPONSE============================================================"
+                            + "\n[address]: " + l4Response.getAddress()
+                            + "\n[port]: " + l4Response.getPort()
+                            + "\n[socket addr]: " + l4Response.getSocketAddress()
+                            + "\n[length]: " + l4Response.getLength()
+                            + "\n[offset]: " + l4Response.getOffset()
+                            + "\n[L4 data]: " + new String(l4Response.getData(), UTF_8).substring(0, l4Response.getLength()));
 
 //                    forwardL4Packet(l4Packet);
-//                }
+                }
 
                 // TODO:(4) Packet Conversion (L3 <- L4)
 
@@ -263,10 +264,6 @@ public class ToyVpnConnection implements Runnable {
 
             String VPN_IP_ADDRESS = "10.215.173.1";
             String VPN_VIRTUAL_DNS_SERVER = "10.215.173.2";
-
-
-
-
 
 
             builder
