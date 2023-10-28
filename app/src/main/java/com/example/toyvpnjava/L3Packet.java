@@ -22,6 +22,11 @@ public class L3Packet {
 
     public byte[] data;
 
+    public L3Packet(byte[] data) {
+        data = data;
+    }
+
+
     public L3Packet(ByteBuffer pack) {
         this.packet = pack;
 
@@ -148,9 +153,10 @@ public class L3Packet {
 
     public void print() {
         //if (networkPacket.getDestPort() == 53) {
-        Log.e(TAG, "[Protocol]: " + getProtocolStr()
+        Log.e(TAG, "============================================================L3 REQUEST ============================================================"
+                + "\n[Protocol]: " + getProtocolStr()
                 + "\t [srcIP]: <" + srcIP + ":" + srcPort + ">"
                 + "\t [destIP]: <" + destIP + ":" + destPort + ">"
-                + "\t [data]: " + getDataStr());
+                + "\t [L3 data]: " + getDataStr());
     }
 }
