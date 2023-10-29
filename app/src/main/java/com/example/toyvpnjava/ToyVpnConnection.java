@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ToyVpnConnection implements Runnable {
+    boolean isDebugging = true;
     private String TAG = "ToyVpnConnection";
     String L4_SOCKET_ADDR = "10.215.173.3";
 
@@ -156,7 +157,7 @@ public class ToyVpnConnection implements Runnable {
             }
             Log.i(getTag(), "Giving up");
         } catch (IOException | InterruptedException | IllegalArgumentException e) {
-            Log.e(getTag(), "Connection failed, exiting", e);
+            if (isDebugging) Log.e(getTag(), "Connection failed, exiting", e);
         }
     }
 
@@ -174,7 +175,7 @@ public class ToyVpnConnection implements Runnable {
         // Packets received need to be written to this output stream.
         FileOutputStream out = new FileOutputStream(iface.getFileDescriptor());
         // Allocate the buffer for a single packet.
-        ByteBuffer packet = ByteBuffer.allocate(MAX_PACKET_SIZE);
+        ByteBuffer reqBuf = ByteBuffer.allocate(MAX_PACKET_SIZE);
         // Timeouts:
         //   - when data has not been sent in a while, send empty keepalive messages.
         //   - when data has not been received in a while, assume the connection is broken.
@@ -187,48 +188,83 @@ public class ToyVpnConnection implements Runnable {
 
 
             // (1) Read the outgoing packet from the input stream.
-            int length = in.read(packet.array());
+            int length = in.read(reqBuf.array());
 
 
             if (length > 0) {
-                packet.limit(length);
+                reqBuf.limit(length);
 
-                // (2) Packet Conversion (L3 -> L4)
-                L3Packet l3Packet = getL4Packet(packet);
+                // (2) L3 Packet deserialization
 
+                ByteBuffer reqTemp = reqBuf.asReadOnlyBuffer();
+                L3Packet reqPacket = new L3Packet(reqTemp);
+
+                // Accepts only UDP with port 53
+                if (!(reqPacket.protocol == 17 && reqPacket.destPort == 53)) {
+                    reqBuf.clear();
+                    reqTemp.clear();
+                    continue;
+                }
 
                 idle = false;
                 lastReceiveTime = System.currentTimeMillis();
 
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
-                //  if (l3Packet.protocol == 17 && l3Packet.destPort == 53) {
-                //}
-                l3Packet.print();
-                DatagramPacket l4Response = forwardL4Packet(l3Packet);
-                Log.e(TAG, "========================================================================================================================"
-                        + "\n[address]: " + l4Response.getAddress()
-                        + "\n[port]: " + l4Response.getPort()
-                        + "\n[socket addr]: " + l4Response.getSocketAddress()
-                        + "\n[length]: " + l4Response.getLength()
-                        + "\n[offset]: " + l4Response.getOffset()
-                        + "\n[L4 data]: " + new String(l4Response.getData(), UTF_8).substring(0, l4Response.getLength()));
-                Log.e(TAG, "========================================================================================================================");
-                Log.e(TAG, "bytes length: " + l4Response.getLength());
+                if (isDebugging) reqPacket.print();
+                DatagramPacket l4Response = forwardL4Packet(reqPacket);
+                if (isDebugging)
+                    Log.e(TAG, "========================================================================================================================"
+                            + "\n[address]: " + l4Response.getAddress()
+                            + "\n[port]: " + l4Response.getPort()
+                            + "\n[socket addr]: " + l4Response.getSocketAddress()
+                            + "\n[length]: " + l4Response.getLength()
+                            + "\n[offset]: " + l4Response.getOffset()
+                            + "\n[L4 data]: " + new String(l4Response.getData(), UTF_8).substring(0, l4Response.getLength()));
+                if (isDebugging)
+                    Log.e(TAG, "========================================================================================================================");
+                if (isDebugging) Log.e(TAG, "bytes length: " + l4Response.getLength());
 
                 // TODO: (4) Packet Conversion (L3 <- L4)
                 // TODO: (5) Write the L3 Buffer to output stream.
-                ByteBuffer bf = ByteBuffer.allocate(20 + l4Response.getLength());
-                bf.put(packet.array(), 0, 20);
-                bf.put(l4Response.getData(), 0, l4Response.getLength());
-                out.write(bf.array(), 0, 20 + l4Response.getLength());
 
 
+                ByteBuffer respBuf = ByteBuffer.allocate(MAX_PACKET_SIZE);
 
-                packet.clear();
-                bf.clear();
+                respBuf.put(reqBuf.array(), 0, 12);
+
+                // SRC IP
+                String[] destIpStr = reqPacket.destIP.split("\\.");
+                respBuf.put(Integer.valueOf(destIpStr[0]).byteValue());
+                respBuf.put(Integer.valueOf(destIpStr[1]).byteValue());
+                respBuf.put(Integer.valueOf(destIpStr[2]).byteValue());
+                respBuf.put(Integer.valueOf(destIpStr[3]).byteValue());
+
+
+                // DEST IP
+                String[] srcIpStr = reqPacket.srcIP.split("\\.");
+                respBuf.put(Integer.valueOf(srcIpStr[0]).byteValue());
+                respBuf.put(Integer.valueOf(srcIpStr[1]).byteValue());
+                respBuf.put(Integer.valueOf(srcIpStr[2]).byteValue());
+                respBuf.put(Integer.valueOf(srcIpStr[3]).byteValue());
+
+
+                respBuf.putShort((short) reqPacket.destPort); // SRC PORT
+                respBuf.putShort((short) reqPacket.srcPort);  // DEST PORT
+                respBuf.putShort((short) (8 + l4Response.getLength()));  // UDP length
+                respBuf.putShort((short) 0);  // Optional checksum
+
+                // L7 DNS Response Data
+                respBuf.put(l4Response.getData(), 0, l4Response.getLength());
+                respBuf.flip();  // limit = pos; pos = 0;
+                out.write(respBuf.array(), 0, 28 + l4Response.getLength());
+
+                reqBuf.clear();
+                respBuf.clear();
+
                 // There might be more incoming packets.
                 idle = false;
                 lastSendTime = System.currentTimeMillis();
+
             }
             // If we are idle or waiting for the network, sleep for a
             // fraction of time to avoid busy looping.
@@ -238,12 +274,12 @@ public class ToyVpnConnection implements Runnable {
                 if (lastSendTime + KEEPALIVE_INTERVAL_MS <= timeNow) {
                     // We are receiving for a long time but not sending.
                     // Send empty control messages.
-                    packet.put((byte) 0).limit(1);
+                    reqBuf.put((byte) 0).limit(1);
                     for (int i = 0; i < 3; ++i) {
-                        packet.position(0);
-                        out.write(packet.array(), 0, length);
+                        reqBuf.position(0);
+                        out.write(reqBuf.array(), 0, length);
                     }
-                    packet.clear();
+                    reqBuf.clear();
                     lastSendTime = timeNow;
                 } else if (lastReceiveTime + RECEIVE_TIMEOUT_MS <= timeNow) {
                     // We are sending for a long time but not receiving.
@@ -273,12 +309,12 @@ public class ToyVpnConnection implements Runnable {
 
         synchronized (mService) {
 
-            String VPN_IP_ADDRESS = "10.215.173.1";
-            String VPN_VIRTUAL_DNS_SERVER = "10.215.173.2";
+            String VPN_IP_ADDRESS = "10.0.0.2";
+            String VPN_VIRTUAL_DNS_SERVER = "10.0.0.99";
 
 
             builder
-                    .addAddress(VPN_IP_ADDRESS, 30)
+                    .addAddress(VPN_IP_ADDRESS, 32)
 //                    .addRoute("0.0.0.0", 1)
 //                    .addRoute("128.0.0.0", 1)
                     .addRoute(VPN_VIRTUAL_DNS_SERVER, 32)
@@ -297,13 +333,6 @@ public class ToyVpnConnection implements Runnable {
         return ToyVpnConnection.class.getSimpleName() + "[" + mConnectionId + "]";
     }
 
-
-    L3Packet getL4Packet(ByteBuffer packet) {
-        // Extract Destination IP
-        ByteBuffer temp = packet.asReadOnlyBuffer();
-        return new L3Packet(temp);
-    }
-
     private DatagramPacket forwardL4Packet(L3Packet l3Packet) throws IOException {
 
         DatagramChannel channel = DatagramChannel.open();
@@ -314,10 +343,11 @@ public class ToyVpnConnection implements Runnable {
 //        ByteBuffer receiveBuffer = ByteBuffer.allocate(1024);
 //        int readBytes = channel.read(receiveBuffer);
 
-        Log.e(TAG, "============================================================L4 RESPONSE============================================================");
-        byte[] response = new byte[1024];
-        DatagramPacket packet = new DatagramPacket(response, response.length);
-        channel.socket().receive(packet);
+        if (isDebugging)
+            Log.e(TAG, "============================================================L4 RESPONSE============================================================");
+        byte[] response = new byte[MAX_PACKET_SIZE];
+        DatagramPacket respDatagramPacket = new DatagramPacket(response, response.length);
+        channel.socket().receive(respDatagramPacket);
 
         ///========================================================
 
@@ -326,45 +356,45 @@ public class ToyVpnConnection implements Runnable {
         short NSCOUNT = 0;
         short ARCOUNT = 0;
 
-        Log.e(TAG, "\n\nReceived: " + packet.getLength() + " bytes");
+        if (isDebugging) Log.e(TAG, "\n\nReceived: " + respDatagramPacket.getLength() + " bytes");
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < packet.getLength(); i++) {
+        for (int i = 0; i < respDatagramPacket.getLength(); i++) {
             sb.append(response[i]);
             sb.append(" ");
         }
-        Log.e(TAG, sb.toString());
+        if (isDebugging) Log.e(TAG, sb.toString());
 
         DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(response));
-        Log.e(TAG, "\n\nStart response decode");
-        Log.e(TAG, "Transaction ID: " + dataInputStream.readShort()); // ID
+        if (isDebugging) Log.e(TAG, "\n\nStart response decode");
+        if (isDebugging) Log.e(TAG, "Transaction ID: " + dataInputStream.readShort()); // ID
         short flags = dataInputStream.readByte();
         int QR = (flags & 0b10000000) >>> 7;
         int opCode = (flags & 0b01111000) >>> 3;
         int AA = (flags & 0b00000100) >>> 2;
         int TC = (flags & 0b00000010) >>> 1;
         int RD = flags & 0b00000001;
-        Log.e(TAG, "QR " + QR);
-        Log.e(TAG, "Opcode " + opCode);
-        Log.e(TAG, "AA " + AA);
-        Log.e(TAG, "TC " + TC);
-        Log.e(TAG, "RD " + RD);
+        if (isDebugging) Log.e(TAG, "QR " + QR);
+        if (isDebugging) Log.e(TAG, "Opcode " + opCode);
+        if (isDebugging) Log.e(TAG, "AA " + AA);
+        if (isDebugging) Log.e(TAG, "TC " + TC);
+        if (isDebugging) Log.e(TAG, "RD " + RD);
         flags = dataInputStream.readByte();
         int RA = (flags & 0b10000000) >>> 7;
         int Z = (flags & 0b01110000) >>> 4;
         int RCODE = flags & 0b00001111;
-        Log.e(TAG, "RA " + RA);
-        Log.e(TAG, "Z " + Z);
-        Log.e(TAG, "RCODE " + RCODE);
+        if (isDebugging) Log.e(TAG, "RA " + RA);
+        if (isDebugging) Log.e(TAG, "Z " + Z);
+        if (isDebugging) Log.e(TAG, "RCODE " + RCODE);
 
         QDCOUNT = dataInputStream.readShort();
         ANCOUNT = dataInputStream.readShort();
         NSCOUNT = dataInputStream.readShort();
         ARCOUNT = dataInputStream.readShort();
 
-        Log.e(TAG, "Questions: " + String.format("%s", QDCOUNT));
-        Log.e(TAG, "Answers RRs: " + String.format("%s", ANCOUNT));
-        Log.e(TAG, "Authority RRs: " + String.format("%s", NSCOUNT));
-        Log.e(TAG, "Additional RRs: " + String.format("%s", ARCOUNT));
+        if (isDebugging) Log.e(TAG, "Questions: " + String.format("%s", QDCOUNT));
+        if (isDebugging) Log.e(TAG, "Answers RRs: " + String.format("%s", ANCOUNT));
+        if (isDebugging) Log.e(TAG, "Authority RRs: " + String.format("%s", NSCOUNT));
+        if (isDebugging) Log.e(TAG, "Additional RRs: " + String.format("%s", ARCOUNT));
 
         String QNAME = "";
         int recLen;
@@ -377,11 +407,11 @@ public class ToyVpnConnection implements Runnable {
         }
         short QTYPE = dataInputStream.readShort();
         short QCLASS = dataInputStream.readShort();
-        Log.e(TAG, "Record: " + QNAME);
-        Log.e(TAG, "Record Type: " + String.format("%s", QTYPE));
-        Log.e(TAG, "Class: " + String.format("%s", QCLASS));
+        if (isDebugging) Log.e(TAG, "Record: " + QNAME);
+        if (isDebugging) Log.e(TAG, "Record Type: " + String.format("%s", QTYPE));
+        if (isDebugging) Log.e(TAG, "Class: " + String.format("%s", QCLASS));
 
-        Log.e(TAG, "\n\nstart answer, authority, and additional sections\n");
+        if (isDebugging) Log.e(TAG, "\n\nstart answer, authority, and additional sections\n");
 
         byte firstBytes = dataInputStream.readByte();
         int firstTwoBits = (firstBytes & 0b11000000) >>> 6;
@@ -416,10 +446,10 @@ public class ToyVpnConnection implements Runnable {
                             RDATA.add(nx);
                         }
 
-                        Log.e(TAG, "Type: " + TYPE);
-                        Log.e(TAG, "Class: " + CLASS);
-                        Log.e(TAG, "Time to live: " + TTL);
-                        Log.e(TAG, "Rd Length: " + RDLENGTH);
+                        if (isDebugging) Log.e(TAG, "Type: " + TYPE);
+                        if (isDebugging) Log.e(TAG, "Class: " + CLASS);
+                        if (isDebugging) Log.e(TAG, "Time to live: " + TTL);
+                        if (isDebugging) Log.e(TAG, "Rd Length: " + RDLENGTH);
                     }
 
                     DOMAINS.add(label.toString(StandardCharsets.UTF_8));
@@ -442,18 +472,20 @@ public class ToyVpnConnection implements Runnable {
                 domainToIp.put(ipFinal.substring(0, ipFinal.length() - 1), domainFinal.substring(0, domainFinal.length() - 1));
 
             } else if (firstTwoBits == 0) {
-                Log.e(TAG, "It's a label");
+                if (isDebugging) Log.e(TAG, "It's a label");
             }
 
             firstBytes = dataInputStream.readByte();
             firstTwoBits = (firstBytes & 0b11000000) >>> 6;
         }
 
-        domainToIp.forEach((key, value) -> Log.e(TAG, key + " : " + value));
+        domainToIp.forEach((key, value) -> {
+            if (isDebugging) Log.e(TAG, key + " : " + value);
+        });
 
         ///========================================================
         channel.close();
-        return packet;
+        return respDatagramPacket;
     }
 
 }
