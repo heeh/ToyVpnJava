@@ -22,11 +22,6 @@ public class L3Packet {
 
     public byte[] data;
 
-    public L3Packet(byte[] data) {
-        data = data;
-    }
-
-
     public L3Packet(ByteBuffer pack) {
         this.packet = pack;
 
@@ -151,9 +146,11 @@ public class L3Packet {
 
 
     public void print() {
-        Log.e(TAG, "\n[Protocol]: " + getProtocolStr()
-                + "\t [srcIP]: <" + srcIP + ":" + srcPort + ">"
-                + "\t [destIP]: <" + destIP + ":" + destPort + ">"
-                + "\t [L3 data]: " + getDataStr());
+        Log.e(TAG, "Length: 20(IP) + 8(UDP) + " + data.length + "(DATA)"
+                + "\t[Protocol]: " + getProtocolStr()
+                + "\t [src]: <" + srcIP + ":" + srcPort + ">"
+                + "\t [dest]: <" + destIP + ":" + destPort + ">"
+                + "\t [data]: " + getDataStr());
+        Log.e(TAG, Util.bytesToHex(data));
     }
 }

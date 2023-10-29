@@ -43,12 +43,13 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ToyVpnConnection implements Runnable {
-    //boolean isDebugging = true;
-    boolean isDebugging = false;
+    boolean isDebugging = true;
+    //boolean isDebugging = false;
     private String TAG = "ToyVpnConnection";
-    String L4_SOCKET_ADDR = "10.215.173.3";
+    String L4_SOCKET_ADDR = "10.0.0.2";
 
-    String GOOGLE_DNS_SERVER = "8.8.8.8";
+    //String GOOGLE_DNS_SERVER = "8.8.8.8";
+    String CF_DNS_SERVER = "1.1.1.1";
 
     /**
      * Callback interface to let the {@link ToyVpnService} know about new connections
@@ -213,10 +214,9 @@ public class ToyVpnConnection implements Runnable {
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
 
 
-                if (isDebugging) Log.e(TAG, "REQUEST START========================================================================================================================");
+                if (isDebugging) Log.e(TAG, "REQUEST========================================================================================================================");
                 if (isDebugging) reqPacket.print();
-                if (isDebugging) Log.e(TAG, "REQUEST END  ========================================================================================================================");
-                DatagramPacket l4Response = forwardL4Packet(reqPacket);
+                DatagramPacket respDatagramPacket = forwardL4Packet(reqPacket);
 
                 // TODO: (4) Packet Conversion (L3 <- L4)
                 // TODO: (5) Write the L3 Buffer to output stream.
@@ -226,7 +226,11 @@ public class ToyVpnConnection implements Runnable {
 
                 respBuf.put(reqBuf.array(), 0, 12);
 
-                // SRC IP
+                // SRC IP (4 bytes)
+//                respBuf.put((byte)1);
+//                respBuf.put((byte)1);
+//                respBuf.put((byte)1);
+//                respBuf.put((byte)1);
                 String[] destIpStr = reqPacket.destIP.split("\\.");
                 respBuf.put(Integer.valueOf(destIpStr[0]).byteValue());
                 respBuf.put(Integer.valueOf(destIpStr[1]).byteValue());
@@ -234,31 +238,29 @@ public class ToyVpnConnection implements Runnable {
                 respBuf.put(Integer.valueOf(destIpStr[3]).byteValue());
 
 
-                // DEST IP
+                // DEST IP (4 bytes)
                 String[] srcIpStr = reqPacket.srcIP.split("\\.");
                 respBuf.put(Integer.valueOf(srcIpStr[0]).byteValue());
                 respBuf.put(Integer.valueOf(srcIpStr[1]).byteValue());
                 respBuf.put(Integer.valueOf(srcIpStr[2]).byteValue());
                 respBuf.put(Integer.valueOf(srcIpStr[3]).byteValue());
 
-
+                // UDP Header (8 bytes)
                 respBuf.putShort((short) reqPacket.destPort); // SRC PORT
                 respBuf.putShort((short) reqPacket.srcPort);  // DEST PORT
-                respBuf.putShort((short) (8 + l4Response.getLength()));  // UDP length
-                respBuf.putShort((short) 0);  // Optional checksum
+                respBuf.putShort((short) (8 + respDatagramPacket.getLength()));  // UDP length
+                respBuf.putShort((short) 0);  // Optional checksum; 0 for unused
 
                 // L7 DNS Response Data
-                respBuf.put(l4Response.getData(), 0, l4Response.getLength());
+                respBuf.put(respDatagramPacket.getData(), 0, respDatagramPacket.getLength());
                 respBuf.flip();  // limit = pos; pos = 0;
-                out.write(respBuf.array(), 0, 28 + l4Response.getLength());
+                out.write(respBuf.array(), 0, respBuf.limit());
 
 
                 ByteBuffer respTemp = respBuf.asReadOnlyBuffer();
                 L3Packet respPacket = new L3Packet(respTemp);
-                if (isDebugging) Log.e(TAG, "RESPONSE START========================================================================================================================");
+                if (isDebugging) Log.e(TAG, "RESPONSE========================================================================================================================");
                 if (isDebugging) respPacket.print();
-                if (isDebugging) Log.e(TAG, "RESPONSE END  ========================================================================================================================");
-
                 reqBuf.clear();
                 respBuf.clear();
 
@@ -338,12 +340,8 @@ public class ToyVpnConnection implements Runnable {
 
         DatagramChannel channel = DatagramChannel.open();
         mService.protect(channel.socket());
-        channel.connect(new InetSocketAddress(GOOGLE_DNS_SERVER, 53));
-//        channel.configureBlocking(false);
+        channel.connect(new InetSocketAddress(CF_DNS_SERVER, 53));
         channel.write(ByteBuffer.wrap(l3Packet.data));
-//        ByteBuffer receiveBuffer = ByteBuffer.allocate(1024);
-//        int readBytes = channel.read(receiveBuffer);
-
         byte[] response = new byte[MAX_PACKET_SIZE];
         DatagramPacket respDatagramPacket = new DatagramPacket(response, response.length);
         channel.socket().receive(respDatagramPacket);
@@ -360,7 +358,7 @@ public class ToyVpnConnection implements Runnable {
         short NSCOUNT = 0;
         short ARCOUNT = 0;
 
-        if (isDebugging) Log.e(TAG, "\n\nReceived: " + respDatagramPacket.getLength() + " bytes");
+        if (isDebugging) Log.e(TAG, "\n\nResponse Received: " + respDatagramPacket.getLength() + " bytes");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < respDatagramPacket.getLength(); i++) {
             sb.append(response[i]);
@@ -407,7 +405,7 @@ public class ToyVpnConnection implements Runnable {
             for (int i = 0; i < recLen; i++) {
                 record[i] = dataInputStream.readByte();
             }
-            QNAME = new String(record, StandardCharsets.UTF_8);
+            QNAME = new String(record, UTF_8);
         }
         short QTYPE = dataInputStream.readShort();
         short QCLASS = dataInputStream.readShort();
@@ -456,7 +454,7 @@ public class ToyVpnConnection implements Runnable {
                         if (isDebugging) Log.e(TAG, "Rd Length: " + RDLENGTH);
                     }
 
-                    DOMAINS.add(label.toString(StandardCharsets.UTF_8));
+                    DOMAINS.add(label.toString(UTF_8));
                     label.reset();
                 }
 
@@ -487,7 +485,7 @@ public class ToyVpnConnection implements Runnable {
             if (isDebugging) Log.e(TAG, key + " : " + value);
         });
 
-        ///========================================================
+
         channel.close();
 
         return respDatagramPacket;
