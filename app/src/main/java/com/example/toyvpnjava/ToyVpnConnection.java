@@ -43,7 +43,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ToyVpnConnection implements Runnable {
-    boolean isDebugging = true;
+    //boolean isDebugging = true;
+    boolean isDebugging = false;
     private String TAG = "ToyVpnConnection";
     String L4_SOCKET_ADDR = "10.215.173.3";
 
@@ -210,19 +211,12 @@ public class ToyVpnConnection implements Runnable {
                 lastReceiveTime = System.currentTimeMillis();
 
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
+
+
+                if (isDebugging) Log.e(TAG, "REQUEST START========================================================================================================================");
                 if (isDebugging) reqPacket.print();
+                if (isDebugging) Log.e(TAG, "REQUEST END  ========================================================================================================================");
                 DatagramPacket l4Response = forwardL4Packet(reqPacket);
-                if (isDebugging)
-                    Log.e(TAG, "========================================================================================================================"
-                            + "\n[address]: " + l4Response.getAddress()
-                            + "\n[port]: " + l4Response.getPort()
-                            + "\n[socket addr]: " + l4Response.getSocketAddress()
-                            + "\n[length]: " + l4Response.getLength()
-                            + "\n[offset]: " + l4Response.getOffset()
-                            + "\n[L4 data]: " + new String(l4Response.getData(), UTF_8).substring(0, l4Response.getLength()));
-                if (isDebugging)
-                    Log.e(TAG, "========================================================================================================================");
-                if (isDebugging) Log.e(TAG, "bytes length: " + l4Response.getLength());
 
                 // TODO: (4) Packet Conversion (L3 <- L4)
                 // TODO: (5) Write the L3 Buffer to output stream.
@@ -257,6 +251,13 @@ public class ToyVpnConnection implements Runnable {
                 respBuf.put(l4Response.getData(), 0, l4Response.getLength());
                 respBuf.flip();  // limit = pos; pos = 0;
                 out.write(respBuf.array(), 0, 28 + l4Response.getLength());
+
+
+                ByteBuffer respTemp = respBuf.asReadOnlyBuffer();
+                L3Packet respPacket = new L3Packet(respTemp);
+                if (isDebugging) Log.e(TAG, "RESPONSE START========================================================================================================================");
+                if (isDebugging) respPacket.print();
+                if (isDebugging) Log.e(TAG, "RESPONSE END  ========================================================================================================================");
 
                 reqBuf.clear();
                 respBuf.clear();
@@ -343,13 +344,16 @@ public class ToyVpnConnection implements Runnable {
 //        ByteBuffer receiveBuffer = ByteBuffer.allocate(1024);
 //        int readBytes = channel.read(receiveBuffer);
 
-        if (isDebugging)
-            Log.e(TAG, "============================================================L4 RESPONSE============================================================");
         byte[] response = new byte[MAX_PACKET_SIZE];
         DatagramPacket respDatagramPacket = new DatagramPacket(response, response.length);
         channel.socket().receive(respDatagramPacket);
 
-        ///========================================================
+        if (isDebugging) Log.e(TAG, "[address]: " + respDatagramPacket.getAddress()
+                + "\n[port]: " + respDatagramPacket.getPort()
+                + "\n[socket addr]: " + respDatagramPacket.getSocketAddress()
+                + "\n[length]: " + respDatagramPacket.getLength()
+                + "\n[offset]: " + respDatagramPacket.getOffset()
+                + "\n[L4 data]: " + new String(respDatagramPacket.getData(), UTF_8).substring(0, respDatagramPacket.getLength()));
 
         short QDCOUNT = 1;
         short ANCOUNT = 0;
@@ -485,6 +489,7 @@ public class ToyVpnConnection implements Runnable {
 
         ///========================================================
         channel.close();
+
         return respDatagramPacket;
     }
 

@@ -150,11 +150,8 @@ public class L3Packet {
     }
 
 
-
     public void print() {
-        //if (networkPacket.getDestPort() == 53) {
-        Log.e(TAG, "============================================================L3 REQUEST ============================================================"
-                + "\n[Protocol]: " + getProtocolStr()
+        Log.e(TAG, "\n[Protocol]: " + getProtocolStr()
                 + "\t [srcIP]: <" + srcIP + ":" + srcPort + ">"
                 + "\t [destIP]: <" + destIP + ":" + destPort + ">"
                 + "\t [L3 data]: " + getDataStr());
