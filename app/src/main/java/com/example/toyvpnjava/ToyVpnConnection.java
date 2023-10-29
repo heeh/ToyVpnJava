@@ -201,27 +201,31 @@ public class ToyVpnConnection implements Runnable {
                 lastReceiveTime = System.currentTimeMillis();
 
                 // (3) L4 Packet Forwarding (Device <-> DNS Server)
-                if (l3Packet.protocol == 17 && l3Packet.destPort == 53) {
-                    l3Packet.print();
-                    DatagramPacket l4Response = forwardL4Packet(l3Packet);
-                    Log.e(TAG, "========================================================================================================================"
-                            + "\n[address]: " + l4Response.getAddress()
-                            + "\n[port]: " + l4Response.getPort()
-                            + "\n[socket addr]: " + l4Response.getSocketAddress()
-                            + "\n[length]: " + l4Response.getLength()
-                            + "\n[offset]: " + l4Response.getOffset()
-                            + "\n[L4 data]: " + new String(l4Response.getData(), UTF_8).substring(0, l4Response.getLength()));
-                    Log.e(TAG, "========================================================================================================================");
-//                    forwardL4Packet(l4Packet);
-                }
+                //  if (l3Packet.protocol == 17 && l3Packet.destPort == 53) {
+                //}
+                l3Packet.print();
+                DatagramPacket l4Response = forwardL4Packet(l3Packet);
+                Log.e(TAG, "========================================================================================================================"
+                        + "\n[address]: " + l4Response.getAddress()
+                        + "\n[port]: " + l4Response.getPort()
+                        + "\n[socket addr]: " + l4Response.getSocketAddress()
+                        + "\n[length]: " + l4Response.getLength()
+                        + "\n[offset]: " + l4Response.getOffset()
+                        + "\n[L4 data]: " + new String(l4Response.getData(), UTF_8).substring(0, l4Response.getLength()));
+                Log.e(TAG, "========================================================================================================================");
+                Log.e(TAG, "bytes length: " + l4Response.getLength());
 
-                // TODO:(4) Packet Conversion (L3 <- L4)
-
-
+                // TODO: (4) Packet Conversion (L3 <- L4)
                 // TODO: (5) Write the L3 Buffer to output stream.
-//                out.write(l3Response.packet.array(), 0, packet.capacity());
-//                out.write(packet.array(), 0, length);
+                ByteBuffer bf = ByteBuffer.allocate(20 + l4Response.getLength());
+                bf.put(packet.array(), 0, 20);
+                bf.put(l4Response.getData(), 0, l4Response.getLength());
+                out.write(bf.array(), 0, 20 + l4Response.getLength());
+
+
+
                 packet.clear();
+                bf.clear();
                 // There might be more incoming packets.
                 idle = false;
                 lastSendTime = System.currentTimeMillis();
@@ -322,45 +326,45 @@ public class ToyVpnConnection implements Runnable {
         short NSCOUNT = 0;
         short ARCOUNT = 0;
 
-        Log.e(TAG,"\n\nReceived: " + packet.getLength() + " bytes");
+        Log.e(TAG, "\n\nReceived: " + packet.getLength() + " bytes");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < packet.getLength(); i++) {
             sb.append(response[i]);
             sb.append(" ");
         }
-        Log.e(TAG,sb.toString());
+        Log.e(TAG, sb.toString());
 
         DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(response));
-        Log.e(TAG,"\n\nStart response decode");
-        Log.e(TAG,"Transaction ID: " + dataInputStream.readShort()); // ID
+        Log.e(TAG, "\n\nStart response decode");
+        Log.e(TAG, "Transaction ID: " + dataInputStream.readShort()); // ID
         short flags = dataInputStream.readByte();
         int QR = (flags & 0b10000000) >>> 7;
-        int opCode = ( flags & 0b01111000) >>> 3;
-        int AA = ( flags & 0b00000100) >>> 2;
-        int TC = ( flags & 0b00000010) >>> 1;
+        int opCode = (flags & 0b01111000) >>> 3;
+        int AA = (flags & 0b00000100) >>> 2;
+        int TC = (flags & 0b00000010) >>> 1;
         int RD = flags & 0b00000001;
-        Log.e(TAG,"QR "+QR);
-        Log.e(TAG,"Opcode "+opCode);
-        Log.e(TAG,"AA "+AA);
-        Log.e(TAG,"TC "+TC);
-        Log.e(TAG,"RD "+RD);
+        Log.e(TAG, "QR " + QR);
+        Log.e(TAG, "Opcode " + opCode);
+        Log.e(TAG, "AA " + AA);
+        Log.e(TAG, "TC " + TC);
+        Log.e(TAG, "RD " + RD);
         flags = dataInputStream.readByte();
         int RA = (flags & 0b10000000) >>> 7;
-        int Z = ( flags & 0b01110000) >>> 4;
+        int Z = (flags & 0b01110000) >>> 4;
         int RCODE = flags & 0b00001111;
-        Log.e(TAG,"RA "+RA);
-        Log.e(TAG,"Z "+ Z);
-        Log.e(TAG,"RCODE " +RCODE);
+        Log.e(TAG, "RA " + RA);
+        Log.e(TAG, "Z " + Z);
+        Log.e(TAG, "RCODE " + RCODE);
 
         QDCOUNT = dataInputStream.readShort();
         ANCOUNT = dataInputStream.readShort();
         NSCOUNT = dataInputStream.readShort();
         ARCOUNT = dataInputStream.readShort();
 
-        Log.e(TAG,"Questions: " + String.format("%s",QDCOUNT ));
-        Log.e(TAG,"Answers RRs: " + String.format("%s", ANCOUNT));
-        Log.e(TAG,"Authority RRs: " + String.format("%s", NSCOUNT));
-        Log.e(TAG,"Additional RRs: " + String.format("%s", ARCOUNT));
+        Log.e(TAG, "Questions: " + String.format("%s", QDCOUNT));
+        Log.e(TAG, "Answers RRs: " + String.format("%s", ANCOUNT));
+        Log.e(TAG, "Authority RRs: " + String.format("%s", NSCOUNT));
+        Log.e(TAG, "Additional RRs: " + String.format("%s", ARCOUNT));
 
         String QNAME = "";
         int recLen;
@@ -373,11 +377,11 @@ public class ToyVpnConnection implements Runnable {
         }
         short QTYPE = dataInputStream.readShort();
         short QCLASS = dataInputStream.readShort();
-        Log.e(TAG,"Record: " + QNAME);
-        Log.e(TAG,"Record Type: " + String.format("%s", QTYPE));
-        Log.e(TAG,"Class: " + String.format("%s", QCLASS));
+        Log.e(TAG, "Record: " + QNAME);
+        Log.e(TAG, "Record Type: " + String.format("%s", QTYPE));
+        Log.e(TAG, "Class: " + String.format("%s", QCLASS));
 
-        Log.e(TAG,"\n\nstart answer, authority, and additional sections\n");
+        Log.e(TAG, "\n\nstart answer, authority, and additional sections\n");
 
         byte firstBytes = dataInputStream.readByte();
         int firstTwoBits = (firstBytes & 0b11000000) >>> 6;
@@ -385,19 +389,19 @@ public class ToyVpnConnection implements Runnable {
         ByteArrayOutputStream label = new ByteArrayOutputStream();
         Map<String, String> domainToIp = new HashMap<>();
 
-        for(int i = 0; i < ANCOUNT; i++) {
-            if(firstTwoBits == 3) {
+        for (int i = 0; i < ANCOUNT; i++) {
+            if (firstTwoBits == 3) {
                 byte currentByte = dataInputStream.readByte();
                 boolean stop = false;
                 byte[] newArray = Arrays.copyOfRange(response, currentByte, response.length);
                 DataInputStream sectionDataInputStream = new DataInputStream(new ByteArrayInputStream(newArray));
                 ArrayList<Integer> RDATA = new ArrayList<>();
                 ArrayList<String> DOMAINS = new ArrayList<>();
-                while(!stop) {
+                while (!stop) {
                     byte nextByte = sectionDataInputStream.readByte();
-                    if(nextByte > 0) {
+                    if (nextByte > 0) {
                         byte[] currentLabel = new byte[nextByte];
-                        for(int j = 0; j < nextByte; j++) {
+                        for (int j = 0; j < nextByte; j++) {
                             currentLabel[j] = sectionDataInputStream.readByte();
                         }
                         label.write(currentLabel);
@@ -407,15 +411,15 @@ public class ToyVpnConnection implements Runnable {
                         short CLASS = dataInputStream.readShort();
                         int TTL = dataInputStream.readInt();
                         int RDLENGTH = dataInputStream.readShort();
-                        for(int s = 0; s < RDLENGTH; s++) {
+                        for (int s = 0; s < RDLENGTH; s++) {
                             int nx = dataInputStream.readByte() & 255;// and with 255 to
                             RDATA.add(nx);
                         }
 
-                        Log.e(TAG,"Type: " + TYPE);
-                        Log.e(TAG,"Class: " + CLASS);
-                        Log.e(TAG,"Time to live: " + TTL);
-                        Log.e(TAG,"Rd Length: " + RDLENGTH);
+                        Log.e(TAG, "Type: " + TYPE);
+                        Log.e(TAG, "Class: " + CLASS);
+                        Log.e(TAG, "Time to live: " + TTL);
+                        Log.e(TAG, "Rd Length: " + RDLENGTH);
                     }
 
                     DOMAINS.add(label.toString(StandardCharsets.UTF_8));
@@ -424,28 +428,28 @@ public class ToyVpnConnection implements Runnable {
 
                 StringBuilder ip = new StringBuilder();
                 StringBuilder domainSb = new StringBuilder();
-                for(Integer ipPart:RDATA) {
+                for (Integer ipPart : RDATA) {
                     ip.append(ipPart).append(".");
                 }
 
-                for(String domainPart:DOMAINS) {
-                    if(!domainPart.equals("")) {
+                for (String domainPart : DOMAINS) {
+                    if (!domainPart.equals("")) {
                         domainSb.append(domainPart).append(".");
                     }
                 }
                 String domainFinal = domainSb.toString();
                 String ipFinal = ip.toString();
-                domainToIp.put(ipFinal.substring(0, ipFinal.length()-1), domainFinal.substring(0, domainFinal.length()-1));
+                domainToIp.put(ipFinal.substring(0, ipFinal.length() - 1), domainFinal.substring(0, domainFinal.length() - 1));
 
-            }else if(firstTwoBits == 0){
-                Log.e(TAG,"It's a label");
+            } else if (firstTwoBits == 0) {
+                Log.e(TAG, "It's a label");
             }
 
             firstBytes = dataInputStream.readByte();
             firstTwoBits = (firstBytes & 0b11000000) >>> 6;
         }
 
-        domainToIp.forEach((key, value) -> Log.e(TAG,key + " : " + value));
+        domainToIp.forEach((key, value) -> Log.e(TAG, key + " : " + value));
 
         ///========================================================
         channel.close();
